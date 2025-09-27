@@ -1,4 +1,4 @@
-const CACHE_NAME = "piedilista-v1";
+const CACHE_NAME = "piedilista-v2";
 self.addEventListener("install", e => e.waitUntil(self.skipWaiting()));
 self.addEventListener("activate", e => e.waitUntil(self.clients.claim()));
 self.addEventListener("fetch", e => {

@@ -85,36 +85,41 @@ export default function AppPiedilistaOmezzolli() {
   const [accessGranted, setAccessGranted] = useState(false);
   const accessCode = "7792";
 
-  // Classi (valori centrali)
-  const classMids = useMemo(
-    () => Array.from({ length: numClasses }, (_, i) => +(classStart + i * classWidth).toFixed(1)),
-    [classStart, classWidth, numClasses]
-  );
+// CENTRI CLASSE FISSI: 10, 15, 20, ..., 85  (niente 5 cm)
+const classMids = useMemo(
+  () => Array.from({ length: 16 }, (_, i) => 10 + i * 5), // 10 → 85
+  []
+);
 
-  // Etichetta classe secondo convenzione forestale
-  const classLabel = (d) => {
-    const rd = Math.round(d);
-    if (rd === 5) return "02";
-    if (rd === 10) return "01";
-    if (rd === 15) return "0";
-    if (rd >= 20) return String(((rd - 20) / 5) + 1); // 20->1, 25->2, ... 85->14
-    return String(rd);
-  };
+// Numero classi derivato (sempre 16)
+const NUM_CLASSES = classMids.length;
+
+// Etichetta visuale: 10→"00", 15→"0", 20→"1", ..., 85→"14"
+const classLabel = (d) => {
+  const rd = Math.round(d);
+  if (rd === 10) return "00";
+  if (rd === 15) return "0";
+  if (rd >= 20) return String(((rd - 20) / 5) + 1); // 20->1, 25->2, ... 85->14
+  return String(rd); // fallback (non dovrebbe servire)
+};
+
 
   // Normalizzazione conteggi rispetto al numero classi corrente
   const normalizedCounts = useMemo(() => {
-    const obj = {};
-    species.forEach((sp) => {
-      const arr = counts[sp.id] ?? Array(numClasses).fill(0);
-      obj[sp.id] = arr.slice(0, numClasses).concat(Array(Math.max(0, numClasses - arr.length)).fill(0));
-    });
-    return obj;
-  }, [species, counts, numClasses]);
+  const obj = {};
+  species.forEach((sp) => {
+    const arr = counts[sp.id] ?? Array(NUM_CLASSES).fill(0);
+    obj[sp.id] = arr
+      .slice(0, NUM_CLASSES)
+      .concat(Array(Math.max(0, NUM_CLASSES - arr.length)).fill(0));
+  });
+  return obj;
+}, [species, counts, NUM_CLASSES]);
 
   const setCount = (spId, idx, val) => {
     setCounts((prev) => {
       const copy = { ...prev };
-      const arr = (copy[spId] ?? Array(numClasses).fill(0)).slice();
+      const arr = (copy[spId] ?? Array(NUM_CLASSES).fill(0)).slice();
       arr[idx] = clampInt(val);
       copy[spId] = arr;
       return copy;
@@ -124,7 +129,7 @@ export default function AppPiedilistaOmezzolli() {
   const incCount = (spId, idx, delta) => {
     setCounts((prev) => {
       const copy = { ...prev };
-      const arr = (copy[spId] ?? Array(numClasses).fill(0)).slice();
+      const arr = (copy[spId] ?? Array(NUM_CLASSES).fill(0)).slice();
       const next = clampInt((arr[idx] ?? 0) + delta);
       arr[idx] = next;
       copy[spId] = arr;
@@ -229,7 +234,7 @@ export default function AppPiedilistaOmezzolli() {
   // Calcoli
   const results = useMemo(() => {
     const perSpecies = species.map((sp) => {
-      const arr = normalizedCounts[sp.id] ?? Array(numClasses).fill(0);
+      const arr = normalizedCounts[sp.id] ?? Array(NUM_CLASSES).fill(0);
       let N = 0, G = 0, V = 0;
       const rows = classMids.map((d, i) => {
         const n = clampInt(arr[i] ?? 0);
@@ -250,29 +255,32 @@ export default function AppPiedilistaOmezzolli() {
       V: acc.V + s.V,
     }), { N: 0, G: 0, V: 0 });
     return { perSpecies, totals };
-  }, [species, normalizedCounts, classMids, numClasses, heightsBySpecies]);
+  }, [species, normalizedCounts, classMids, heightsBySpecies]);
 
   // Reset conteggi
   const resetCounts = () => {
     if (!confirm("Azzerare tutti i conteggi?")) return;
     const empty = {};
-    species.forEach((sp) => (empty[sp.id] = Array(numClasses).fill(0)));
+    species.forEach((sp) => (empty[sp.id] = Array(NUM_CLASSES).fill(0)));
     setCounts(empty);
   };
 
-  // Export CSV
-  const exportCSV = () => {
-    const header = ["Specie", ...classMids.map((d) => `Classe ${classLabel(d)}`), "N_tot", "G_tot_m2", "V_tot_m3"];
-    const lines = [header.join(";")];
-    results.perSpecies.forEach(({ sp, rows, N, G, V }) => {
-      const countsRow = [sp.name, ...rows.map((r) => r.n), N, G.toFixed(3), V.toFixed(3)];
-      lines.push(countsRow.join(";"));
-    });
-    const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a"); a.href = url; a.download = "piedilista_cubatura.csv"; a.click();
-    URL.revokeObjectURL(url);
-  };
+const exportCSV = () => {
+  const header = ["Specie", ...classMids.map((d) => `Classe ${classLabel(d)}`), "N_tot", "G_tot_m2", "V_tot_m3"];
+  const lines = [header.join(";")];
+  results.perSpecies.forEach(({ sp, rows, N, G, V }) => {
+    const countsRow = [sp.name, ...rows.map((r) => r.n), N, G.toFixed(3), V.toFixed(3)];
+    lines.push(countsRow.join(";"));
+  });
+  const blob = new Blob(["\uFEFF" + lines.join("\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "piedilista_cubatura.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+};
+
 
   // Export PDF
   const exportPDF = () => {
@@ -311,7 +319,7 @@ export default function AppPiedilistaOmezzolli() {
   // Carica stato salvato
   useEffect(() => {
     try {
-      const raw = localStorage.getItem("piedilista_state_v1");
+      const raw = localStorage.getItem("piedilista_state_v3");
       if (raw) {
         const data = JSON.parse(raw);
         if (data.species) setSpecies(data.species);
@@ -319,7 +327,7 @@ export default function AppPiedilistaOmezzolli() {
         if (data.heightsBySpecies) setHeightsBySpecies(data.heightsBySpecies);
         if (data.classStart) setClassStart(data.classStart);
         if (data.classWidth) setClassWidth(data.classWidth);
-        if (data.numClasses) setNumClasses(data.numClasses);
+        
       }
     } catch {}
   }, []);
@@ -340,10 +348,11 @@ export default function AppPiedilistaOmezzolli() {
   }, []);
 
   // Salvataggio automatico
-  useEffect(() => {
-    const payload = { species, counts, heightsBySpecies, classStart, classWidth, numClasses };
-    try { localStorage.setItem("piedilista_state_v1", JSON.stringify(payload)); } catch {}
-  }, [species, counts, heightsBySpecies, classStart, classWidth, numClasses]);
+useEffect(() => {
+  const payload = { species, counts, heightsBySpecies, classStart, classWidth, NUM_CLASSES };
+  try { localStorage.setItem("piedilista_state_v3", JSON.stringify(payload)); } catch {}
+}, [species, counts, heightsBySpecies, classStart, classWidth, NUM_CLASSES]);
+
 
   // Schermata accesso
   if (!accessGranted) {
@@ -591,10 +600,13 @@ export default function AppPiedilistaOmezzolli() {
                             onChange={(e)=>{
                               const val = e.target.value === '' ? NaN : parseFloat(e.target.value);
                               setHeightsBySpecies(prev=>{
-                                const existing = prev[sp.id] ?? Array(numClasses).fill(NaN);
-                                const arr = existing.slice(0, numClasses).concat(Array(Math.max(0, numClasses - existing.length)).fill(NaN));
-                                arr[idx] = val;
-                                return { ...prev, [sp.id]: arr };
+                                const existing = prev[sp.id] ?? Array(NUM_CLASSES).fill(NaN);
+				const arr = existing
+  				.slice(0, NUM_CLASSES)
+  				.concat(Array(Math.max(0, NUM_CLASSES - existing.length)).fill(NaN));
+				arr[idx] = val;
+				return { ...prev, [sp.id]: arr };
+
                               })
                             }}
                           />
